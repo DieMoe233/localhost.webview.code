@@ -88,7 +88,7 @@ install_deps() {
     pkg update -y -o Dpkg::Options::="--force-confdef" > /dev/null 2>&1 || { error "pkg update 失败"; exit 1; }
 
     step "安装必要依赖..."
-    { yes '' 2>/dev/null || true; } | pkg install -y termux-services openssl-tool git || { error "依赖安装失败"; exit 1; }
+    { yes '' 2>/dev/null || true; } | pkg install -y termux-services openssl-tool git nodejs || { error "依赖安装失败"; exit 1; }
     ok "依赖安装完成"
 }
 
