@@ -662,14 +662,15 @@ do_install() {
     install_extensions
     echo ""
     print_summary
+}
 
-    # 注册 code 快捷指令
+# =========================== 注册快捷指令 ===========================
+_register_code() {
     local self_path
     self_path=$(realpath "$0" 2>/dev/null || readlink -f "$0" 2>/dev/null || echo "$(cd "$(dirname "$0")" && pwd)/$(basename "$0")")
     if [ -f "$self_path" ]; then
         cp "$self_path" "$PREFIX/bin/code" || true
         chmod +x "$PREFIX/bin/code" || true
-        ok "已注册快捷指令: code"
     fi
 }
 
@@ -703,3 +704,6 @@ case "${1:-install}" in
     -h|--help) usage ;;
     *)         error "未知子命令: $1"; usage; exit 1 ;;
 esac
+
+# 确保 code 快捷指令始终为最新（除彻底卸载外）
+[ "$1" != "uninstall" ] && _register_code
