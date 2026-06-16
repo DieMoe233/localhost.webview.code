@@ -106,7 +106,7 @@ companion object {
 配套的 code-server 一键部署脚本，让 Android 设备本地运行 code-server，WebView 应用直接连接。
 
 ```bash
-curl -fsSL https://touhou.diemoe.net/usr/termux/code-server/install.sh | bash
+curl -fsSLo install.sh https://touhou.diemoe.net/usr/termux/code-server/install.sh && bash install.sh
 ```
 
 脚本会自动安装依赖、配置 `termux-services` 服务、预装扩展（Live Share / 中文语言包 / SSH FS）。

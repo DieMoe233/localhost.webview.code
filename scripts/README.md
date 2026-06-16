@@ -45,12 +45,7 @@ Android 设备
 ### 一键部署
 
 ```bash
-# 在 Termux 中直接运行（推荐）
-curl -fsSL https://touhou.diemoe.net/usr/termux/code-server/install.sh | bash
-
-# 或先下载再运行
-curl -fsSLo install.sh https://touhou.diemoe.net/usr/termux/code-server/install.sh
-bash install.sh
+curl -fsSLo install.sh https://touhou.diemoe.net/usr/termux/code-server/install.sh && bash install.sh
 ```
 
 脚本会依次完成：

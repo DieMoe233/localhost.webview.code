@@ -4,7 +4,6 @@
 # 配套 localhost.webview.code Android WebView 应用
 #
 # 用法:
-#   curl -fsSL <URL> | bash       # 一行部署
 #   bash install.sh               # 交互式安装
 #   bash install.sh start         # 启动服务
 #   bash install.sh stop          # 停止服务
@@ -16,11 +15,6 @@
 # ============================================================================
 
 set -e
-
-# ---- stdin 检测：管道运行时重定向到终端以支持交互输入 ----
-if [ ! -t 0 ]; then
-    exec </dev/tty
-fi
 
 # =========================== 常量 ===========================
 SERVICE_NAME="code-server"
