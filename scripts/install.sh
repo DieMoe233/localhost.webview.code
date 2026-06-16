@@ -26,9 +26,14 @@ EXIT_LOG="$LOG_DIR/exit.log"
 SERVICE_DIR="$PREFIX/var/service/$SERVICE_NAME"
 ARGV_FILE="$HOME/.local/share/code-server/User/argv.json"
 
-# 预装扩展
-DEFAULT_EXTENSIONS=(
-    "https://touhou.diemoe.net/usr/vsix/ms-vsliveshare.vsliveshare-1.0.5936.vsix"
+# 预装扩展 —— 第一阶段：从 VS Code 官方市场安装（Open VSX 上没有的）
+EXTENSIONS_VSCODE_MARKETPLACE=(
+    "ms-vsliveshare.vsliveshare@1.0.5936"
+    "GitHub.copilot-chat"
+)
+
+# 预装扩展 —— 第二阶段：从 Open VSX 安装（code-server 默认市场）
+EXTENSIONS_OPEN_VSX=(
     "MS-CEINTL.vscode-language-pack-zh-hans"
     "Kelvin.vscode-sshfs"
 )
@@ -80,19 +85,11 @@ check_termux() {
 # =========================== 依赖安装 ===========================
 install_deps() {
     step "更新包列表..."
-    pkg update -y -o Dpkg::Options::="--force-confdef" > /dev/null 2>&1
+    pkg update -y -o Dpkg::Options::="--force-confdef" > /dev/null 2>&1 || { error "pkg update 失败"; exit 1; }
 
     step "安装必要依赖..."
-    local deps=()
-    pkg list-installed termux-services > /dev/null 2>&1 || deps+=(termux-services)
-    command -v curl &>/dev/null || deps+=(curl)
-
-    if [ ${#deps[@]} -gt 0 ]; then
-        pkg install -y "${deps[@]}"
-        ok "依赖安装完成: ${deps[*]}"
-    else
-        ok "依赖已就绪"
-    fi
+    { yes '' 2>/dev/null || true; } | pkg install -y termux-services openssl-tool git || { error "依赖安装失败"; exit 1; }
+    ok "依赖安装完成"
 }
 
 # =========================== 安装 code-server ===========================
@@ -237,6 +234,111 @@ YAMLEOF
     [ "$auth" = "password" ] && ok "密码认证已启用" || ok "无密码模式（仅 localhost 可访问）"
 }
 
+# =========================== 市场切换 ===========================
+_find_product_json() {
+    for p in         "$PREFIX/lib/node_modules/code-server/lib/vscode/product.json"         "$PREFIX/lib/code-server/lib/vscode/product.json"; do
+        [ -f "$p" ] && { echo "$p"; return 0; }
+    done
+    return 1
+}
+
+_switch_to_vscode_marketplace() {
+    local product_json
+    product_json=$(_find_product_json)
+    if [ -z "$product_json" ]; then
+        warn "找不到 product.json，跳过市场切换"
+        return 1
+    fi
+    cp "$product_json" "$product_json.bak" || { warn "备份 product.json 失败"; return 1; }
+
+    if command -v node &>/dev/null; then
+        local had_gallery
+        had_gallery=$(node -e "
+            var fs=require('fs'),p=JSON.parse(fs.readFileSync('$product_json','utf8'));
+            var had=p.extensionsGallery?1:0;
+            p.extensionsGallery={serviceUrl:'https://marketplace.visualstudio.com/_apis/public/gallery',itemUrl:'https://marketplace.visualstudio.com/items'};
+            fs.writeFileSync('$product_json',JSON.stringify(p,null,2));
+            process.stdout.write(String(had));
+        " || true)
+        if [ "$had_gallery" = "0" ]; then
+            touch "$product_json.no_gallery" || true
+            info "已切换至 VS Code 官方市场 (product.json 中原本无 extensionsGallery)"
+        else
+            info "已切换至 VS Code 官方市场"
+        fi
+    else
+        warn "node 不可用，无法切换市场"
+        return 1
+    fi
+}
+
+_restore_marketplace() {
+    local product_json
+    product_json=$(_find_product_json)
+    [ -z "$product_json" ] && return 1
+
+    if [ -f "$product_json.no_gallery" ]; then
+        node -e "
+            var fs=require('fs'),p=JSON.parse(fs.readFileSync('$product_json','utf8'));
+            delete p.extensionsGallery;
+            fs.writeFileSync('$product_json',JSON.stringify(p,null,2));
+        " 2>/dev/null || true
+        rm -f "$product_json.no_gallery" "$product_json.bak" || true
+    elif [ -f "$product_json.bak" ]; then
+        mv "$product_json.bak" "$product_json" || true
+    fi
+    info "已恢复默认市场 (Open VSX)"
+}
+
+# =========================== 安装单个扩展 ===========================
+_install_one() {
+    local ext="$1" ext_dir="$2"
+    local ext_name install_target="$ext"
+
+    if [[ "$ext" =~ \.vsix(\?.*)?$ ]]; then
+        ext_name=$(basename "$ext" .vsix | sed 's/-[0-9].*//')
+    else
+        ext_name=$(echo "$ext" | sed 's/@.*//')
+    fi
+
+    echo -n "    安装 $ext_name ... "
+
+    if [[ "$ext" =~ ^https?:// ]]; then
+        local tmp_vsix
+        tmp_vsix=$(mktemp -d)/"${ext_name}.vsix"
+        if curl -fsSL --retry 2 -o "$tmp_vsix" "$ext" 2>/dev/null; then
+            install_target="$tmp_vsix"
+            local sz; sz=$(stat -c%s "$tmp_vsix" 2>/dev/null || echo "?")
+            echo -n "(下载 ${sz} bytes) "
+        else
+            echo -e "${RED}✗${NC} (下载失败)"
+            return 1
+        fi
+    fi
+
+    local err_output exit_code
+    err_output=$(NODE_OPTIONS="--require $REWRITE_JS" code-server --force --install-extension "$install_target" 2>&1)
+    exit_code=$?
+
+    local installed_ok=false
+    if [ $exit_code -eq 0 ]; then
+        if ls "$ext_dir" 2>/dev/null | grep -qi "$ext_name"; then
+            installed_ok=true
+        elif NODE_OPTIONS="--require $REWRITE_JS" code-server --list-extensions 2>/dev/null | grep -qi "$ext_name"; then
+            installed_ok=true
+        fi
+    fi
+
+    [[ "$install_target" != "$ext" ]] && rm -f "$install_target" || true
+
+    if $installed_ok; then
+        echo -e "${GREEN}✓${NC}"; return 0
+    else
+        echo -e "${RED}✗${NC}"
+        [ -n "$err_output" ] && { echo "$err_output" | while read -r line; do echo "        $line"; done; } || true
+        return 1
+    fi
+}
 # =========================== 安装扩展 ===========================
 install_extensions() {
     step "安装预装扩展..."
@@ -249,78 +351,79 @@ install_extensions() {
     }
 
     local ext_dir="$HOME/.local/share/code-server/extensions"
-    mkdir -p "$ext_dir"
+    mkdir -p "$ext_dir" || true
     info "  扩展目录: $ext_dir"
-    echo ""
 
     local installed=() failed=()
 
-    for ext in "${DEFAULT_EXTENSIONS[@]}"; do
-        local ext_name install_target="$ext"
+    # ---- 第一阶段：VS Code 官方市场 ----
+    if [ ${#EXTENSIONS_VSCODE_MARKETPLACE[@]} -gt 0 ]; then
+        step "  第一阶段: VS Code 官方市场"
+        _switch_to_vscode_marketplace || warn "市场切换失败，第一阶段扩展可能无法安装"
+        echo ""
 
-        if [[ "$ext" =~ \.vsix(\?.*)?$ ]]; then
-            ext_name=$(basename "$ext" .vsix | sed 's/-[0-9].*//')
-        else
-            ext_name="$ext"
-        fi
-
-        echo -n "  安装 $ext_name ... "
-
-        # vsix URL → 先下载
-        if [[ "$ext" =~ ^https?:// ]]; then
-            local tmp_vsix
-            tmp_vsix=$(mktemp -d)/"${ext_name}.vsix"
-            if curl -fsSL --retry 2 -o "$tmp_vsix" "$ext" 2>/dev/null; then
-                install_target="$tmp_vsix"
-                local sz; sz=$(stat -c%s "$tmp_vsix" 2>/dev/null || echo "?")
-                echo -n "(下载 ${sz} bytes) "
+        for ext in "${EXTENSIONS_VSCODE_MARKETPLACE[@]}"; do
+            if _install_one "$ext" "$ext_dir"; then
+                installed+=("$ext")
             else
-                echo -e "${RED}✗${NC} (下载失败)"
-                failed+=("$ext"); continue
+                failed+=("$ext")
             fi
-        fi
+        done
 
-        # 安装
-        local err_output exit_code
-        err_output=$(NODE_OPTIONS="--require $REWRITE_JS" code-server --force --install-extension "$install_target" 2>&1)
-        exit_code=$?
+        _restore_marketplace
+        echo ""
+    fi
 
-        # 验证
-        local installed_ok=false
-        if [ $exit_code -eq 0 ]; then
-            if ls "$ext_dir" 2>/dev/null | grep -qi "$ext_name"; then
-                installed_ok=true
-            elif NODE_OPTIONS="--require $REWRITE_JS" code-server --list-extensions 2>/dev/null | grep -qi "$ext_name"; then
-                installed_ok=true
+    # ---- 第二阶段：Open VSX（code-server 默认） ----
+    if [ ${#EXTENSIONS_OPEN_VSX[@]} -gt 0 ]; then
+        step "  第二阶段: Open VSX"
+        echo ""
+
+        for ext in "${EXTENSIONS_OPEN_VSX[@]}"; do
+            if _install_one "$ext" "$ext_dir"; then
+                installed+=("$ext")
             else
-                err_output="目录和 --list-extensions 中均未找到（${ext_name}）"
+                failed+=("$ext")
             fi
-        fi
-
-        if $installed_ok; then
-            echo -e "${GREEN}✓${NC}"; installed+=("$ext")
-        else
-            echo -e "${RED}✗${NC}"
-            [ -n "$err_output" ] && echo "$err_output" | while read -r line; do echo "      $line"; done
-            failed+=("$ext")
-        fi
-
-        [[ "$install_target" != "$ext" ]] && rm -f "$install_target"
-    done
+        done
+        echo ""
+    fi
 
     # ---- 中文语言包 → 自动配置 locale ----
     for ext in "${installed[@]}"; do
         if echo "$ext" | grep -qi "language-pack.*zh"; then
             step "  中文语言包已安装，设置 locale: zh-cn"
-            mkdir -p "$(dirname "$ARGV_FILE")"
+            mkdir -p "$(dirname "$ARGV_FILE")" || true
             if [ ! -f "$ARGV_FILE" ]; then
-                echo '{"locale":"zh-cn"}' > "$ARGV_FILE"
+                echo '{"locale":"zh-cn"}' > "$ARGV_FILE" || true
                 ok "已创建 argv.json"
             elif ! grep -q '"locale"' "$ARGV_FILE" 2>/dev/null; then
-                sed -i 's/}$/,"locale":"zh-cn"}/' "$ARGV_FILE"
+                sed -i 's/}$/,"locale":"zh-cn"}/' "$ARGV_FILE" || true
                 ok "已追加 locale"
             else
                 info "locale 已配置"
+            fi
+            break
+        fi
+    done
+
+    # ---- Live Share process.platform 补丁 ----
+    for ext in "${installed[@]}"; do
+        if echo "$ext" | grep -qi "vsliveshare"; then
+            step "  对 Live Share 打 process.platform 补丁..."
+            local ls_dir
+            ls_dir=$(find "$ext_dir" -maxdepth 2 -type d -name "ms-vsliveshare.vsliveshare-*" 2>/dev/null | head -1)
+            if [ -n "$ls_dir" ]; then
+                local patch_count=0
+                while IFS= read -r -d '' f; do
+                    if grep -q 'process\.platform' "$f" 2>/dev/null; then
+                        sed -i 's/process\.platform/"android"/g' "$f" || true
+                        patch_count=$((patch_count + 1))
+                    fi
+                done < <(find "$ls_dir" -name "*.js" -type f -print0 2>/dev/null)
+                ok "已修补 $patch_count 个文件"
+            else
+                warn "未找到 Live Share 扩展目录，跳过补丁"
             fi
             break
         fi
@@ -345,7 +448,8 @@ setup_service() {
 
     cat > "$SERVICE_DIR/run" << RUNEOF
 #!/data/data/com.termux/files/usr/bin/bash
-exec env NODE_OPTIONS="--require $REWRITE_JS" code-server \\
+export NODE_OPTIONS="--require $REWRITE_JS"
+exec code-server \\
     --app-name "Visual Studio Code" \\
     --welcome-text "Visual Studio Code" \\
     --bind-addr 127.0.0.1:8443 \\
