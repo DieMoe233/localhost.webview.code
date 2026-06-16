@@ -101,6 +101,26 @@ companion object {
 └── gradlew / gradlew.bat
 ```
 
+## Termux 部署
+
+配套的 code-server 一键部署脚本，让 Android 设备本地运行 code-server，WebView 应用直接连接。
+
+```bash
+curl -fsSL https://touhou.diemoe.net/usr/termux/code-server/install.sh | bash
+```
+
+脚本会自动安装依赖、配置 `termux-services` 服务、预装扩展（Live Share / 中文语言包 / SSH FS）。
+
+详细文档：[scripts/README.md](scripts/README.md)
+
+| 命令 | 功能 |
+|------|------|
+| `bash scripts/install.sh start` | 启动服务 |
+| `bash scripts/install.sh stop` | 停止服务 |
+| `bash scripts/install.sh restart` | 重启服务 |
+| `bash scripts/install.sh status` | 查看状态 |
+| `bash scripts/install.sh enable` | 启用自启 |
+
 ## License
 
 MIT
