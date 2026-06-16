@@ -668,6 +668,7 @@ do_install() {
 _register_code() {
     local self_path
     self_path=$(realpath "$0" 2>/dev/null || readlink -f "$0" 2>/dev/null || echo "$(cd "$(dirname "$0")" && pwd)/$(basename "$0")")
+    [ "$self_path" = "$PREFIX/bin/code" ] && return 0
     if [ -f "$self_path" ]; then
         cp "$self_path" "$PREFIX/bin/code" || true
         chmod +x "$PREFIX/bin/code" || true
