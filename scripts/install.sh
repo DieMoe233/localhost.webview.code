@@ -71,7 +71,15 @@ usage() {
     echo "  status      查看状态"
     echo "  enable      启用自启"
     echo "  disable     禁用自启"
+    echo "  update      更新 code-server"
+    echo "  reinstall   强制重装 code-server"
+    echo "  linux       切换至 Linux 模式"
+    echo "  android     切换回 Android 模式"
+    echo "  extension   管理扩展 (install|list|uninstall)"
     echo "  uninstall   卸载清理"
+    echo ""
+    echo "安装后也可使用 code 命令:"
+    echo "  code start | stop | restart | status | update | extension ..."
 }
 
 # =========================== 环境检测 ===========================
@@ -407,28 +415,6 @@ install_extensions() {
         fi
     done
 
-    # ---- Live Share process.platform 补丁 ----
-    for ext in "${installed[@]}"; do
-        if echo "$ext" | grep -qi "vsliveshare"; then
-            step "  对 Live Share 打 process.platform 补丁..."
-            local ls_dir
-            ls_dir=$(find "$ext_dir" -maxdepth 2 -type d -name "ms-vsliveshare.vsliveshare-*" 2>/dev/null | head -1)
-            if [ -n "$ls_dir" ]; then
-                local patch_count=0
-                while IFS= read -r -d '' f; do
-                    if grep -q 'process\.platform' "$f" 2>/dev/null; then
-                        sed -i 's/process\.platform/"android"/g' "$f" || true
-                        patch_count=$((patch_count + 1))
-                    fi
-                done < <(find "$ls_dir" -name "*.js" -type f -print0 2>/dev/null)
-                ok "已修补 $patch_count 个文件"
-            else
-                warn "未找到 Live Share 扩展目录，跳过补丁"
-            fi
-            break
-        fi
-    done
-
     echo ""
     ok "扩展安装完成: ${#installed[@]} 成功 / ${#failed[@]} 失败"
     if [ ${#failed[@]} -gt 0 ]; then
@@ -487,8 +473,15 @@ print_summary() {
     echo -e "  ${YELLOW}⚠ termux-services 首次安装后需重启 Termux${NC}"
     echo "  重启后运行:"
     echo ""
-    echo "  bash install.sh start      # 启动服务"
-    echo "  bash install.sh enable     # 启用自启"
+    echo "  code start                 # 启动服务"
+    echo "  code enable                # 启用自启"
+    echo ""
+    echo "  安装额外扩展建议切换至 Linux 模式:"
+    echo "  code linux                 # 切换后 code extension install <ID>"
+    echo "  code android               # 安装完切回 Android 模式"
+    echo ""
+    echo "  ⚠ Live Share 必须在 Android 模式下运行"
+    echo "  如需使用 Live Share 请确保已切回: code android"
     echo ""
 }
 
@@ -569,8 +562,86 @@ do_uninstall() {
     step "清理文件..."
     rm -rf "$SERVICE_DIR" "$CONFIG_DIR" "$LOG_DIR" "$ARGV_FILE"
 
-    warn "code-server 本体未卸载（如需卸载: pkg uninstall code-server）"
+    rm -f "$PREFIX/bin/code" || true
+
+    echo ""
+    read -r -p "  是否彻底卸载 code-server 本体？(y/N): " purge
+    if [[ "$purge" =~ ^[Yy] ]]; then
+        step "卸载 code-server..."
+        pkg uninstall -y code-server 2>/dev/null || true
+        rm -f "$PREFIX/bin/code" || true
+        ok "code-server 已彻底卸载"
+    else
+        warn "code-server 本体已保留（如需卸载: pkg uninstall code-server）"
+    fi
     ok "卸载完成"
+}
+
+# =========================== 模式切换 ===========================
+_switch_mode() {
+    local mode="$1"
+    local runfile="$SERVICE_DIR/run"
+    [ -f "$runfile" ] || { error "服务未安装，请先运行 code install"; exit 1; }
+
+    case "$mode" in
+        linux)
+            if grep -q 'export NODE_OPTIONS' "$runfile" 2>/dev/null; then
+                info "已是 Linux 模式"
+                return 0
+            fi
+            sed -i "2a export NODE_OPTIONS=\"--require $REWRITE_JS\"" "$runfile" || true
+            ok "已切换至 Linux 模式"
+            sv_restart
+            ;;
+        android)
+            if ! grep -q 'export NODE_OPTIONS' "$runfile" 2>/dev/null; then
+                info "已是 Android 模式"
+                return 0
+            fi
+            sed -i '/export NODE_OPTIONS/d' "$runfile" || true
+            ok "已切换至 Android 模式"
+            sv_restart
+            ;;
+        *)
+            echo "用法: code linux | code android"
+            ;;
+    esac
+}
+
+# =========================== 更新 ===========================
+do_update() {
+    step "更新 code-server..."
+    pkg update -y -o Dpkg::Options::="--force-confdef" > /dev/null 2>&1 || { error "pkg update 失败"; exit 1; }
+    pkg upgrade -y code-server || { error "更新失败"; exit 1; }
+    ok "code-server 已更新"
+    sv_restart
+}
+
+# =========================== 扩展管理 ===========================
+do_extension() {
+    local sub="${1:-list}"
+    shift 2>/dev/null || true
+    case "$sub" in
+        install)
+            [ -z "$1" ] && { error "用法: code extension install <扩展ID>"; exit 1; }
+            step "安装扩展: $1"
+            local ext_dir="$HOME/.local/share/code-server/extensions"
+            mkdir -p "$ext_dir" || true
+            NODE_OPTIONS="--require $REWRITE_JS" code-server --force --install-extension "$1"                 && ok "安装完成" || error "安装失败"
+            ;;
+        list)
+            step "已安装扩展:"
+            NODE_OPTIONS="--require $REWRITE_JS" code-server --list-extensions 2>/dev/null | while read -r line; do echo "  $line"; done || true
+            ;;
+        uninstall)
+            [ -z "$1" ] && { error "用法: code extension uninstall <扩展ID>"; exit 1; }
+            step "卸载扩展: $1"
+            NODE_OPTIONS="--require $REWRITE_JS" code-server --uninstall-extension "$1"                 && ok "卸载完成" || error "卸载失败"
+            ;;
+        *)
+            echo "用法: code extension [install|list|uninstall] [扩展ID]"
+            ;;
+    esac
 }
 
 # =========================== 主流程 ===========================
@@ -591,17 +662,43 @@ do_install() {
     install_extensions
     echo ""
     print_summary
+
+    # 注册 code 快捷指令
+    local self_path
+    self_path=$(realpath "$0" 2>/dev/null || readlink -f "$0" 2>/dev/null || echo "$(cd "$(dirname "$0")" && pwd)/$(basename "$0")")
+    if [ -f "$self_path" ]; then
+        cp "$self_path" "$PREFIX/bin/code" || true
+        chmod +x "$PREFIX/bin/code" || true
+        ok "已注册快捷指令: code"
+    fi
 }
 
 # =========================== 入口 ===========================
 case "${1:-install}" in
-    install)   do_install ;;
+    install)
+        if command -v code-server &>/dev/null; then
+            usage
+        else
+            do_install
+        fi
+        ;;
     start)     sv_start ;;
     stop)      sv_stop ;;
     restart)   sv_restart ;;
     status)    sv_status ;;
     enable)    sv_enable ;;
     disable)   sv_disable ;;
+    update)    do_update ;;
+    reinstall)
+        step "强制重装 code-server..."
+        pkg install -y code-server || { error "重装失败"; exit 1; }
+        hash -r 2>/dev/null || true
+        ok "code-server 已重装"
+        sv_restart
+        ;;
+    linux)    shift; _switch_mode "${1:-linux}" ;;
+    android)  _switch_mode "android" ;;
+    extension) shift; do_extension "$@" ;;
     uninstall) do_uninstall ;;
     -h|--help) usage ;;
     *)         error "未知子命令: $1"; usage; exit 1 ;;
