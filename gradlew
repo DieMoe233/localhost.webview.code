@@ -117,8 +117,24 @@ if ! "$cygwin" && ! "$darwin" && ! "$nonstop" ; then
     esac
 fi
 
-# Collect all arguments for the java command, stracks://issues.gradle.org/browse/GRADLE-1368.
-# See also Cygwin shell arguments (below).
+# Collect all arguments for the java command:
+#   * $DEFAULT_JVM_OPTS, $JAVA_OPTS, and $GRADLE_OPTS can contain fragments of
+#     shell script including quotes and/or backslashes, so put them in double
+#     quotes to make sure that they get re-expanded; and
+#   * put everything else in single quotes, so that it's not re-expanded.
+
+set -- \
+        "-Dorg.gradle.appname=$APP_BASE_NAME" \
+        -classpath "$CLASSPATH" \
+        org.gradle.wrapper.GradleWrapperMain \
+        "$@"
+
+# Stop when "xargs" is not available.
+if ! command -v xargs >/dev/null 2>&1
+then
+    die "xargs is not available"
+fi
+
 # Use "xargs" to parse quoted args.
 #
 # With -d:
@@ -127,6 +143,7 @@ fi
 #   Input items are terminated by the specified character.  Quotes and
 #   backslash are not special; every character in the input is taken
 #   literally.
+
 eval "set -- $(
         printf '%s\n' "$DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS" |
         xargs -n1 |
