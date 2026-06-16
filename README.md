@@ -2,6 +2,8 @@
 
 一个 Android WebView 壳应用，全屏加载 `https://localhost:8443/`（code-server），让平板/手机变身移动 IDE。
 
+![VS Code 多窗口运行效果](img/5d1507e1175fda101ec16b34f03f2be6.png)
+
 ## 特性
 
 - **全屏 WebView**：无 ActionBar，无状态栏，最大化可用空间
