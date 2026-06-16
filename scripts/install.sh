@@ -434,8 +434,7 @@ setup_service() {
 
     cat > "$SERVICE_DIR/run" << RUNEOF
 #!/data/data/com.termux/files/usr/bin/bash
-export NODE_OPTIONS="--require $REWRITE_JS"
-exec code-server \\
+exec env NODE_OPTIONS="--require $REWRITE_JS" code-server \\
     --app-name "Visual Studio Code" \\
     --welcome-text "Visual Studio Code" \\
     --bind-addr 127.0.0.1:8443 \\
@@ -585,20 +584,20 @@ _switch_mode() {
 
     case "$mode" in
         linux)
-            if grep -q 'export NODE_OPTIONS' "$runfile" 2>/dev/null; then
+            if grep -q 'env NODE_OPTIONS=' "$runfile" 2>/dev/null; then
                 info "已是 Linux 模式"
                 return 0
             fi
-            sed -i "2a export NODE_OPTIONS=\"--require $REWRITE_JS\"" "$runfile" || true
+            sed -i "s|^exec code-server|exec env NODE_OPTIONS=\"--require $REWRITE_JS\" code-server|" "$runfile" || true
             ok "已切换至 Linux 模式"
             sv_restart
             ;;
         android)
-            if ! grep -q 'export NODE_OPTIONS' "$runfile" 2>/dev/null; then
+            if ! grep -q 'env NODE_OPTIONS=' "$runfile" 2>/dev/null; then
                 info "已是 Android 模式"
                 return 0
             fi
-            sed -i '/export NODE_OPTIONS/d' "$runfile" || true
+            sed -i 's|^exec env NODE_OPTIONS="[^"]*" code-server|exec code-server|' "$runfile" || true
             ok "已切换至 Android 模式"
             sv_restart
             ;;
