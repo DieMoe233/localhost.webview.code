@@ -7,6 +7,15 @@ android {
     namespace = "localhost.webview.code"
     compileSdk = 36
 
+    signingConfigs {
+        create("fixed") {
+            storeFile = rootProject.file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "debug"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         applicationId = "localhost.webview.code"
         minSdk = 24
@@ -16,6 +25,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig = if (rootProject.file("debug.keystore").exists()) {
+                signingConfigs.getByName("fixed")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(

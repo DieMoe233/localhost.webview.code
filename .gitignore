@@ -22,6 +22,7 @@ local.properties
 *.aab
 *.keystore
 *.jks
+*.b64
 
 # Android
 /app/build/
