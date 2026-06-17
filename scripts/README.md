@@ -1,5 +1,7 @@
 # code-server Termux 部署指南
 
+**中文** | [English](README.en.md)
+
 为 [`localhost.webview.code`](../) Android WebView 应用配套的 code-server 部署方案。
 
 ## 概述
