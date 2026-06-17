@@ -49,7 +49,7 @@ Android Device
 ### One-Command Deploy
 
 ```bash
-curl -fsSLo install.sh https://touhou.diemoe.net/usr/termux/code-server/install.sh && bash install.sh
+curl -fsSLo install.sh https://raw.githubusercontent.com/DieMoe233/localhost.webview.code/refs/heads/master/scripts/install.en.sh && bash install.sh
 ```
 
 The script performs these steps:
