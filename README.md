@@ -60,8 +60,6 @@ APK 生成在 `app/build/outputs/apk/debug/app-debug.apk`。
 
 每次 push 到 `master`/`main` 分支或提交 PR 时，GitHub Actions 自动构建 APK。
 
-前往 [Actions](https://github.com/diemoe/localhost.webview.code/actions) → 最近的 workflow run → 底部 Artifacts → 下载 `app-debug.zip`，解压即可安装。
-
 > CI 使用固定签名，新旧版本可直接覆盖安装，无需卸载。
 
 ## 配置
