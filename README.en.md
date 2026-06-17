@@ -121,7 +121,7 @@ curl -fsSLo install.sh https://touhou.diemoe.net/usr/termux/code-server/install.
 
 The script auto-installs dependencies, configures a `termux-services` service, and preloads extensions (Live Share / SSH FS / Chinese language pack).
 
-Full docs: [scripts/README.md](scripts/README.md) ([English](scripts/README.en.md))
+Full docs: [scripts/README.md](scripts/README.en.md)
 
 | Command | Action |
 |------|------|
