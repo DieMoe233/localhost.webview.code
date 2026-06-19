@@ -119,42 +119,15 @@ install_code_server() {
         command -v code-server &>/dev/null && { ok "code-server 安装成功 (pkg)"; return 0; }
     fi
 
-    # 策略 2：GitHub 预编译二进制
-    warn "pkg 安装失败，从 GitHub 下载预编译二进制..."
-
-    local arch
-    case "$(uname -m)" in
-        aarch64) arch="arm64" ;;
-        armv7l)  arch="armv7l" ;;
-        x86_64)  arch="amd64" ;;
-        *)       error "不支持的架构: $(uname -m)"; exit 1 ;;
-    esac
-
-    local tarball="code-server-linux-${arch}.tar.gz"
-    local url="https://github.com/coder/code-server/releases/latest/download/${tarball}"
-
-    step "  下载 $tarball ..."
-    local tmpdir
-    tmpdir=$(mktemp -d)
-
-    if curl -fsSL --retry 3 -o "$tmpdir/$tarball" "$url"; then
-        tar -xzf "$tmpdir/$tarball" -C "$tmpdir"
-        local extracted_dir
-        extracted_dir=$(find "$tmpdir" -maxdepth 1 -type d -name "code-server-*" | head -1)
-        if [ -d "$extracted_dir" ]; then
-            mkdir -p "$PREFIX/lib/code-server"
-            cp -r "$extracted_dir"/* "$PREFIX/lib/code-server/"
-            ln -sf "$PREFIX/lib/code-server/bin/code-server" "$PREFIX/bin/code-server"
-            chmod +x "$PREFIX/bin/code-server"
-            rm -rf "$tmpdir"
-            hash -r 2>/dev/null || true
-            command -v code-server &>/dev/null && { ok "code-server 安装成功 (GitHub)"; return 0; }
-        fi
-        rm -rf "$tmpdir"
-    fi
-
     error "code-server 安装失败"
-    error "  手动安装: pkg install -y tur-repo && pkg install -y code-server"
+    error ""
+    error "  Termux 上唯一可靠的安装方式是通过 tur-repo："
+    error "    pkg install -y tur-repo && pkg update && pkg install -y code-server"
+    error ""
+    error "  如果仍然失败，请检查："
+    error "    1. 网络是否能访问 tur-repo 源"
+    error "    2. 尝试 pkg update 后重试"
+    error "    3. 运行 termux-change-repo 更换镜像源"
     exit 1
 }
 
@@ -616,6 +589,45 @@ do_update() {
     sv_restart
 }
 
+# =========================== 强制重装 ===========================
+reinstall_code_server() {
+    step "停止服务..."
+    if command -v sv &>/dev/null; then sv down "$SERVICE_NAME" 2>/dev/null || true; fi
+    [ -f "$PREFIX/etc/profile.d/termux-services.sh" ] && {
+        source "$PREFIX/etc/profile.d/termux-services.sh"
+        sv down "$SERVICE_NAME" 2>/dev/null || true
+    }
+
+    step "强制重装 code-server..."
+
+    # 检测安装方式
+    if dpkg -l code-server 2>/dev/null | grep -q '^ii'; then
+        # pkg 管理 → 使用 --reinstall 强制重装
+        info "检测到 pkg 安装，强制重装..."
+        pkg install --reinstall -y code-server || { error "重装失败"; exit 1; }
+    elif [ -d "$PREFIX/lib/code-server" ]; then
+        # 旧版脚本的损坏手动安装（GitHub 二进制不兼容 Termux）→ 清理后用 pkg 重装
+        warn "检测到旧版手动安装（与 Termux 不兼容），清理后通过 pkg 重装..."
+        rm -rf "$PREFIX/lib/code-server"
+        rm -f "$PREFIX/bin/code-server"
+        hash -r 2>/dev/null || true
+        install_code_server
+    else
+        # 未找到安装 → 全新安装
+        warn "未检测到 code-server，执行全新安装..."
+        install_code_server
+    fi
+
+    hash -r 2>/dev/null || true
+    ok "code-server 已重装"
+
+    # 重装后恢复平台 polyfill
+    create_rewrite_js
+
+    step "重启服务..."
+    sv_restart
+}
+
 # =========================== 扩展管理 ===========================
 do_extension() {
     local sub="${1:-list}"
@@ -691,11 +703,7 @@ case "${1:-install}" in
     disable)   sv_disable ;;
     update)    do_update ;;
     reinstall)
-        step "强制重装 code-server..."
-        pkg install -y code-server || { error "重装失败"; exit 1; }
-        hash -r 2>/dev/null || true
-        ok "code-server 已重装"
-        sv_restart
+        reinstall_code_server
         ;;
     linux)    shift; _switch_mode "${1:-linux}" ;;
     android)  _switch_mode "android" ;;

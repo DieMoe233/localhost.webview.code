@@ -118,42 +118,15 @@ install_code_server() {
         command -v code-server &>/dev/null && { ok "code-server installed (pkg)"; return 0; }
     fi
 
-    # Strategy 2: GitHub prebuilt binary
-    warn "pkg failed, downloading prebuilt binary from GitHub..."
-
-    local arch
-    case "$(uname -m)" in
-        aarch64) arch="arm64" ;;
-        armv7l)  arch="armv7l" ;;
-        x86_64)  arch="amd64" ;;
-        *)       error "Unsupported architecture: $(uname -m)"; exit 1 ;;
-    esac
-
-    local tarball="code-server-linux-${arch}.tar.gz"
-    local url="https://github.com/coder/code-server/releases/latest/download/${tarball}"
-
-    step "  Downloading $tarball ..."
-    local tmpdir
-    tmpdir=$(mktemp -d)
-
-    if curl -fsSL --retry 3 -o "$tmpdir/$tarball" "$url"; then
-        tar -xzf "$tmpdir/$tarball" -C "$tmpdir"
-        local extracted_dir
-        extracted_dir=$(find "$tmpdir" -maxdepth 1 -type d -name "code-server-*" | head -1)
-        if [ -d "$extracted_dir" ]; then
-            mkdir -p "$PREFIX/lib/code-server"
-            cp -r "$extracted_dir"/* "$PREFIX/lib/code-server/"
-            ln -sf "$PREFIX/lib/code-server/bin/code-server" "$PREFIX/bin/code-server"
-            chmod +x "$PREFIX/bin/code-server"
-            rm -rf "$tmpdir"
-            hash -r 2>/dev/null || true
-            command -v code-server &>/dev/null && { ok "code-server installed (GitHub)"; return 0; }
-        fi
-        rm -rf "$tmpdir"
-    fi
-
     error "code-server installation failed"
-    error "  Manual install: pkg install -y tur-repo && pkg install -y code-server"
+    error ""
+    error "  The only reliable way to install on Termux is via tur-repo:"
+    error "    pkg install -y tur-repo && pkg update && pkg install -y code-server"
+    error ""
+    error "  If it still fails, check:"
+    error "    1. Network access to tur-repo"
+    error "    2. Run pkg update then retry"
+    error "    3. Run termux-change-repo to switch mirrors"
     exit 1
 }
 
@@ -598,6 +571,45 @@ do_update() {
     sv_restart
 }
 
+# =========================== Force Reinstall ===========================
+reinstall_code_server() {
+    step "Stopping service..."
+    if command -v sv &>/dev/null; then sv down "$SERVICE_NAME" 2>/dev/null || true; fi
+    [ -f "$PREFIX/etc/profile.d/termux-services.sh" ] && {
+        source "$PREFIX/etc/profile.d/termux-services.sh"
+        sv down "$SERVICE_NAME" 2>/dev/null || true
+    }
+
+    step "Force reinstalling code-server..."
+
+    # Detect install method
+    if dpkg -l code-server 2>/dev/null | grep -q '^ii'; then
+        # pkg managed → force reinstall with --reinstall
+        info "Detected pkg install, forcing reinstall..."
+        pkg install --reinstall -y code-server || { error "Reinstall failed"; exit 1; }
+    elif [ -d "$PREFIX/lib/code-server" ]; then
+        # Old broken manual install (GitHub binary incompatible with Termux) → clean up and use pkg
+        warn "Detected old manual install (incompatible with Termux), cleaning up and reinstalling via pkg..."
+        rm -rf "$PREFIX/lib/code-server"
+        rm -f "$PREFIX/bin/code-server"
+        hash -r 2>/dev/null || true
+        install_code_server
+    else
+        # Not found → fresh install
+        warn "code-server not found, performing fresh install..."
+        install_code_server
+    fi
+
+    hash -r 2>/dev/null || true
+    ok "code-server reinstalled"
+
+    # Restore platform polyfill after reinstall
+    create_rewrite_js
+
+    step "Restarting service..."
+    sv_restart
+}
+
 # =========================== Extension Management ===========================
 do_extension() {
     local sub="${1:-list}"
@@ -673,11 +685,7 @@ case "${1:-install}" in
     disable)   sv_disable ;;
     update)    do_update ;;
     reinstall)
-        step "Force reinstalling code-server..."
-        pkg install -y code-server || { error "重装failed"; exit 1; }
-        hash -r 2>/dev/null || true
-        ok "code-server reinstalled"
-        sv_restart
+        reinstall_code_server
         ;;
     linux)    shift; _switch_mode "${1:-linux}" ;;
     android)  _switch_mode "android" ;;
