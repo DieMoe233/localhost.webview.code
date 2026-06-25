@@ -120,8 +120,7 @@ code linux
 # Then install:
 code extension install <extension-id>
 
-# Keep Linux mode if you don't need Live Share
-# Switch back to Android if you use Live Share:
+# Switch back to Android mode or keep Linux mode:
 code android
 ```
 
@@ -144,9 +143,9 @@ code android
 ```
 
 - `process.platform` → `"android"` (native value)
-- **Live Share requires this mode to function**
+- Use when native platform detection is required
 
-> ⚠ Live Share relies on native `process.platform` — must be in Android mode.
+
 
 ## Configuration
 
@@ -211,7 +210,7 @@ code-server --bind-addr 127.0.0.1:8443 --cert
 | `sv: command not found` | Available immediately after install. If not: `source $PREFIX/etc/profile.d/termux-services.sh` |
 | Connection refused | Check service status: `code status` |
 | code-server keeps restarting | View logs: `tail -f ~/.local/share/code-server/current` |
-| Live Share not working | Ensure Android mode: `code android` |
+| Live Share not working | Ensure Live Share extension is installed; code-server 4.125.0+ supports Linux mode |
 | Extension install blocked by platform check | Switch to Linux mode first: `code linux && code extension install <ID>` |
 | Forgot password | View `~/.config/code-server/config.yaml` or delete it and run `code install` |
 | Running install when already installed | Shows help instead of reinstalling; use `code reinstall` to force |

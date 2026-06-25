@@ -434,9 +434,6 @@ print_summary() {
     echo "  code linux                 # Then code extension install <ID>"
     echo "  code android               # Switch back after installing"
     echo ""
-    echo "  ⚠ Live Share requires Android mode"
-    echo "  For Live Share, ensure: code android"
-    echo ""
 }
 
 # =========================== Service Management ===========================

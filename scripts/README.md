@@ -120,8 +120,7 @@ code linux
 # 然后安装：
 code extension install <扩展ID>
 
-# 如果不需要 Live Share，保持 Linux 模式即可
-# 如果需要 Live Share，安装完切回 Android：
+# 安装完可切回 Android 模式，或保持 Linux 模式：
 code android
 ```
 
@@ -144,9 +143,7 @@ code android
 ```
 
 - `process.platform` → `"android"`（原生值）
-- **Live Share 需要此模式才能运行**
-
-> ⚠ Live Share 内部逻辑依赖原生 `process.platform`，必须在 Android 模式下使用。
+- 适用于需要原生平台检测的场景
 
 ## 配置说明
 
@@ -211,7 +208,7 @@ code-server --bind-addr 127.0.0.1:8443 --cert
 | `sv: command not found` | 安装后自动可用，无需重启。如仍不可用：`source $PREFIX/etc/profile.d/termux-services.sh` |
 | 连接被拒绝 | 检查服务状态：`code status` |
 | code-server 反复重启 | 查看日志：`tail -f ~/.local/share/code-server/current` |
-| Live Share 无法使用 | 确认已切 Android 模式：`code android` |
+| Live Share 无法使用 | 确认 Live Share 扩展已安装；code-server 4.125.0+ 已兼容 Linux 模式 |
 | 扩展安装被平台检查拦截 | 切 Linux 模式后安装：`code linux && code extension install <ID>` |
 | 忘记密码 | 查看 `~/.config/code-server/config.yaml` 或删除后重新运行 `code install` |
 | 已安装时运行 install | 会显示帮助而不会重复安装，用 `code reinstall` 强制重装 |

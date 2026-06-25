@@ -450,10 +450,7 @@ print_summary() {
     echo ""
     echo "  安装额外扩展建议切换至 Linux 模式:"
     echo "  code linux                 # 切换后 code extension install <ID>"
-    echo "  code android               # 安装完切回 Android 模式"
-    echo ""
-    echo "  ⚠ Live Share 必须在 Android 模式下运行"
-    echo "  如需使用 Live Share 请确保已切回: code android"
+    echo "  code android               # 安装完可切回 Android 模式"
     echo ""
 }
 
