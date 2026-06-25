@@ -125,6 +125,8 @@ class MainActivity : AppCompatActivity() {
 
     // 隐藏状态栏（全屏），手势下滑可临时唤出
     private fun hideSystemBars() {
+        // 窗口化模式（分屏 / 自由窗口 / DeX）下不隐藏，否则会与窗口标题栏叠加
+        if (isInMultiWindowMode) return
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowInsetsControllerCompat(window, binding.root)
         controller.hide(WindowInsetsCompat.Type.statusBars())
@@ -134,6 +136,8 @@ class MainActivity : AppCompatActivity() {
 
     // 导航栏不遮挡 WebView 底部内容
     private fun applyWindowInsets() {
+        // 窗口化模式下系统会自动处理内边距，不需要手动设置
+        if (isInMultiWindowMode) return
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
             val navBar = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
             view.setPadding(
