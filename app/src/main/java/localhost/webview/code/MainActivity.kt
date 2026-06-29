@@ -1,13 +1,17 @@
 package localhost.webview.code
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.view.KeyEvent
 import androidx.activity.addCallback
 import android.net.Uri
 import android.provider.OpenableColumns
 import java.io.File
+import android.content.Context
 import android.net.http.SslError
+import android.webkit.JavascriptInterface
 import android.os.Bundle
 import android.os.Message
 import android.webkit.SslErrorHandler
@@ -154,6 +158,23 @@ class MainActivity : AppCompatActivity() {
         private const val DEFAULT_URL = "https://localhost:8443/"
     }
 
+    // 原生剪贴板桥 —— 绕过 Android WebView 中 navigator.clipboard.readText() 静默失败的问题
+    inner class ClipboardBridge {
+        @JavascriptInterface
+        fun read(): String {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = cm.primaryClip ?: return ""
+            if (clip.itemCount == 0) return ""
+            return clip.getItemAt(0).coerceToText(this@MainActivity).toString()
+        }
+
+        @JavascriptInterface
+        fun write(text: String) {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("", text))
+        }
+    }
+
     @SuppressLint("WebViewApiAvailability")
     private fun setupWebView(webView: WebView) {
         with(webView.settings) {
@@ -185,6 +206,9 @@ class MainActivity : AppCompatActivity() {
             @Suppress("DEPRECATION")
             setSupportMultipleWindows(true)
         }
+
+        // 注册原生剪贴板桥
+        webView.addJavascriptInterface(ClipboardBridge(), "_clipboardNative")
 
         webView.webViewClient = object : WebViewClient() {
 
@@ -221,6 +245,25 @@ class MainActivity : AppCompatActivity() {
                 handler.proceed()
             }
 
+            // 每次页面加载完成后注入剪贴板补丁
+            override fun onPageFinished(view: WebView?, url: String?) {
+                view?.evaluateJavascript("""
+                    (function(){
+                        if (window.__clipPatched) return;
+                        window.__clipPatched = true;
+                        var origRead = navigator.clipboard.readText;
+                        navigator.clipboard.readText = function(){
+                            try { return Promise.resolve(_clipboardNative.read()); }
+                            catch(e) { return origRead.call(navigator.clipboard); }
+                        };
+                        var origWrite = navigator.clipboard.writeText;
+                        navigator.clipboard.writeText = function(t){
+                            try { _clipboardNative.write(t); return Promise.resolve(); }
+                            catch(e) { return origWrite.call(navigator.clipboard, t); }
+                        };
+                    })();
+                """.trimIndent(), null)
+            }
         }
 
         webView.webChromeClient = object : WebChromeClient() {
