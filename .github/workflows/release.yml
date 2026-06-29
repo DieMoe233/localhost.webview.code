@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install SDK components
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platforms;android-36" "build-tools;36.1.0"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Setup keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > debug.keystore
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Sign APK (if keystore available)
+        if: env.SIGNING_KEYSTORE != ''
+        run: |
+          echo "${{ secrets.SIGNING_KEYSTORE }}" | base64 -d > release.jks
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore release.jks \
+            -storepass "${{ secrets.SIGNING_KEYSTORE_PASSWORD }}" \
+            -keypass "${{ secrets.SIGNING_KEY_PASSWORD }}" \
+            app/build/outputs/apk/release/app-release-unsigned.apk \
+            "${{ secrets.SIGNING_KEY_ALIAS }}"
+        continue-on-error: true
+
+      - name: Find APK
+        id: find_apk
+        run: |
+          apk=$(find app/build/outputs/apk -type f -name '*.apk' 2>/dev/null | head -1)
+          echo "apk=$apk" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          files: ${{ steps.find_apk.outputs.apk }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
