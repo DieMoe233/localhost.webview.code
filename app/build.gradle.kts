@@ -20,8 +20,8 @@ android {
         applicationId = "localhost.webview.code"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.0.4"
     }
 
     buildTypes {
@@ -33,6 +33,7 @@ android {
             }
         }
         release {
+            signingConfig = signingConfigs.getByName("fixed")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
