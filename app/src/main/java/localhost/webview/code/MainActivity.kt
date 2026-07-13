@@ -273,7 +273,15 @@ class MainActivity : AppCompatActivity() {
                 request?.grant(request.resources)
             }
 
-            // 拦截新窗口（target="_blank" / window.open），用系统浏览器打开
+            // 拦截新窗口（target="_blank" / window.open / VS Code 智能体窗口）
+            //
+            // 智能体窗口使用 about:blank + document.write 创建 DOM，必须：
+            // 1. 在 onCreateWindow 中同步创建 WebView 并返回给 JS
+            // 2. 启动独立的 WebViewHostActivity 来承载该 WebView
+            //
+            // URL 决策：
+            //   hitTestResult.extra 有值 → 点击链接 → 按 host/port 判断
+            //   hitTestResult 为空     → JS window.open → 一定是 code-server 窗口
             override fun onCreateWindow(
                 view: WebView?,
                 isDialog: Boolean,
@@ -282,55 +290,95 @@ class MainActivity : AppCompatActivity() {
             ): Boolean {
                 val context = view?.context ?: return false
 
-                // 尝试直接从 hitTestResult 获取 URL（适用于点击链接的场景）
+                // 点击链接场景：从 hitTestResult 获取 URL
                 val hitTestUrl = view.hitTestResult.extra
                 if (hitTestUrl != null) {
-                    openUrl(context, hitTestUrl)
+                    val uri = Uri.parse(hitTestUrl)
+                    if (uri.host == "localhost" && uri.port == 8443) {
+                        // code-server 链接 → 新 MainActivity 实例
+                        context.startActivity(
+                            Intent(context, MainActivity::class.java).apply {
+                                data = uri
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+                            }
+                        )
+                    } else {
+                        // 外部链接 → 系统浏览器
+                        try {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, uri).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                            )
+                        } catch (_: Exception) { }
+                    }
+                    // 点击链接不创建 WebView；return false 让系统用默认行为
                     return false
                 }
 
-                // 弹窗（window.open）场景：创建临时 WebView 捕获目标 URL
-                val tempWebView = WebView(context).apply {
+                // JS window.open（about:blank 智能体窗口等）：同步创建 WebView
+                // 使用 applicationContext 避免 WebView 跨 Activity 移动时的 Context 绑定问题
+                val childWebView = WebView(context.applicationContext).apply {
+                    with(settings) {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        allowFileAccess = true
+                        useWideViewPort = true
+                        loadWithOverviewMode = true
+                        builtInZoomControls = true
+                        displayZoomControls = false
+                        cacheMode = WebSettings.LOAD_DEFAULT
+                    }
+                    addJavascriptInterface(ClipboardBridge(), "_clipboardNative")
                     webViewClient = object : WebViewClient() {
-                        override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                            openUrl(context, url)
-                            view?.stopLoading()
+                        override fun onReceivedSslError(
+                            view: WebView?,
+                            handler: SslErrorHandler,
+                            error: SslError?
+                        ) {
+                            handler.proceed()
                         }
-
-                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                            openUrl(context, request?.url?.toString())
-                            return true
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            view?.evaluateJavascript("""
+                                (function(){
+                                    if (window.__clipPatched) return;
+                                    window.__clipPatched = true;
+                                    var oR = navigator.clipboard.readText;
+                                    navigator.clipboard.readText = function(){
+                                        try { return Promise.resolve(_clipboardNative.read()); }
+                                        catch(e) { return oR.call(navigator.clipboard); }
+                                    };
+                                    var oW = navigator.clipboard.writeText;
+                                    navigator.clipboard.writeText = function(t){
+                                        try { _clipboardNative.write(t); return Promise.resolve(); }
+                                        catch(e) { return oW.call(navigator.clipboard, t); }
+                                    };
+                                })();
+                            """.trimIndent(), null)
+                        }
+                    }
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onPermissionRequest(request: PermissionRequest?) {
+                            request?.grant(request.resources)
                         }
                     }
                 }
-                (resultMsg?.obj as? WebView.WebViewTransport)?.webView = tempWebView
+
+                // 缓存 WebView，启动独立 Activity 承载
+                val cacheId = WebViewCache.put(childWebView)
+
+                context.startActivity(
+                    Intent(context, WebViewHostActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+                        putExtra(WebViewHostActivity.CACHE_ID, cacheId)
+                    }
+                )
+
+                // 向 Chrome 返回 WebView 引用，JS 获得后执行 document.write 写入内容
+                (resultMsg?.obj as? WebView.WebViewTransport)?.webView = childWebView
                 resultMsg?.sendToTarget()
                 return true
-            }
-
-            // localhost:8443 → 新应用实例；其他 → 系统浏览器
-            private fun openUrl(context: android.content.Context, url: String?) {
-                if (url == null) return
-                val uri = Uri.parse(url)
-
-                if (uri.host == "localhost" && uri.port == 8443) {
-                    // code-server 新窗口 → 启动新 MainActivity 实例
-                    context.startActivity(
-                        Intent(context, MainActivity::class.java).apply {
-                            data = uri
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-                        }
-                    )
-                } else {
-                    // 外部链接 → 系统浏览器
-                    try {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, uri).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                        )
-                    } catch (_: Exception) { }
-                }
             }
         }
     }

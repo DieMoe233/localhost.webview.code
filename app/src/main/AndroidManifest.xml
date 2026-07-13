@@ -15,6 +15,14 @@
         android:theme="@style/Theme.WebViewApp"
         tools:targetApi="34">
 
+        <!-- 子窗口宿主：承载 WebView.onCreateWindow 同步创建的 WebView -->
+        <activity
+            android:name=".WebViewHostActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:documentLaunchMode="always"
+            android:exported="false"
+            android:theme="@style/Theme.WebViewApp" />
+
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
