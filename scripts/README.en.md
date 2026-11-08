@@ -28,17 +28,6 @@ Android Device
     └── https://localhost:8443/
 ```
 
-### Key Design Decisions
-
-| Decision | Reason |
-|------|------|
-| `127.0.0.1:8443` binding | Local-only access, prevents insecure LAN connections |
-| `--cert` (no args) | code-server auto-generates and manages self-signed certs |
-| Default Linux mode | Works out of the box for most extensions |
-| Optional Android mode | Required by Live Share and a few extensions needing native platform |
-| Marketplace switching (install-time) | Live Share etc. must be installed from VS Code Marketplace, then restored to Open VSX |
-| Auto-start after install | Zero manual steps — ready to connect immediately after deployment |
-
 ## Quick Start
 
 ### Prerequisites
@@ -51,6 +40,17 @@ Android Device
 ```bash
 curl -fsSLo install.sh https://raw.githubusercontent.com/DieMoe233/localhost.webview.code/refs/heads/master/scripts/install.en.sh && bash install.sh
 ```
+
+### Key Design Decisions
+
+| Decision | Reason |
+|------|------|
+| `127.0.0.1:8443` binding | Local-only access, prevents insecure LAN connections |
+| `--cert` (no args) | code-server auto-generates and manages self-signed certs |
+| Default Linux mode | Works out of the box for most extensions |
+| Optional Android mode | Required by Live Share and a few extensions needing native platform |
+| Marketplace switching (install-time) | Live Share etc. must be installed from VS Code Marketplace, then restored to Open VSX |
+| Auto-start after install | Zero manual steps — ready to connect immediately after deployment |
 
 The script performs these steps:
 - Installs dependencies (`termux-services`, `openssl-tool`, `git`, `nodejs`)
