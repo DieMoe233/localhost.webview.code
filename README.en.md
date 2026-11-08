@@ -25,6 +25,26 @@ An Android WebView shell app that loads `https://localhost:8443/` (code-server) 
 | Ctrl+Shift+W | Close current window |
 | ESC / Back | Forward to WebView (close panel / dismiss suggestions) |
 
+## Termux Deployment
+
+A companion one-click deployment script that runs code-server locally on Android, connecting directly to the WebView app.
+
+```bash
+curl -fsSLo install.sh https://touhou.diemoe.net/usr/termux/code-server/install.sh && bash install.sh
+```
+
+The script auto-installs dependencies, configures a `termux-services` service, and preloads extensions (Live Share / SSH FS / Chinese language pack).
+
+Full docs: [scripts/README.md](scripts/README.en.md)
+
+| Command | Action |
+|------|------|
+| `bash scripts/install.sh start` | Start service |
+| `bash scripts/install.sh stop` | Stop service |
+| `bash scripts/install.sh restart` | Restart service |
+| `bash scripts/install.sh status` | View status |
+| `bash scripts/install.sh enable` | Enable auto-start |
+
 ## Build
 
 ### Requirements
@@ -110,26 +130,6 @@ Replace `app/src/main/res/mipmap-*/ic_launcher.png` (5 densities). A 1024×1024 
 ├── gradle/wrapper/
 └── gradlew / gradlew.bat
 ```
-
-## Termux Deployment
-
-A companion one-click deployment script that runs code-server locally on Android, connecting directly to the WebView app.
-
-```bash
-curl -fsSLo install.sh https://touhou.diemoe.net/usr/termux/code-server/install.sh && bash install.sh
-```
-
-The script auto-installs dependencies, configures a `termux-services` service, and preloads extensions (Live Share / SSH FS / Chinese language pack).
-
-Full docs: [scripts/README.md](scripts/README.en.md)
-
-| Command | Action |
-|------|------|
-| `bash scripts/install.sh start` | Start service |
-| `bash scripts/install.sh stop` | Stop service |
-| `bash scripts/install.sh restart` | Restart service |
-| `bash scripts/install.sh status` | View status |
-| `bash scripts/install.sh enable` | Enable auto-start |
 
 ## License
 
