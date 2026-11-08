@@ -28,17 +28,6 @@ Android 设备
     └── https://localhost:8443/
 ```
 
-### 关键设计
-
-| 决策 | 原因 |
-|------|------|
-| `127.0.0.1:8443` 绑定 | 仅本地访问，防止局域网不安全连接 |
-| `--cert`（不传参） | code-server 自动生成和管理自签名证书 |
-| 默认 Linux 模式 | 开箱即用，绝大多数扩展可正常工作 |
-| Android 模式可选 | Live Share 等少数扩展需要原生 Android 平台 |
-| 市场切换（安装时） | Live Share 等需从 VS Code 官方市场安装，安装完恢复 Open VSX |
-| 安装后自动启动 + 自启 | 无需手动操作，部署完成即可连接 |
-
 ## 快速开始
 
 ### 前置条件
@@ -51,6 +40,17 @@ Android 设备
 ```bash
 curl -fsSLo install.sh https://touhou.diemoe.net/usr/termux/code-server/install.sh && bash install.sh
 ```
+
+### 设计
+
+| 决策 | 原因 |
+|------|------|
+| `127.0.0.1:8443` 绑定 | 仅本地访问，防止局域网不安全连接 |
+| `--cert`（不传参） | code-server 自动生成和管理自签名证书 |
+| 默认 Linux 模式 | 开箱即用，绝大多数扩展可正常工作 |
+| Android 模式可选 | Live Share 等少数扩展需要原生 Android 平台 |
+| 市场切换（安装时） | Live Share 等需从 VS Code 官方市场安装，安装完恢复 Open VSX |
+| 安装后自动启动 + 自启 | 无需手动操作，部署完成即可连接 |
 
 脚本会依次完成：
 - 安装依赖（`termux-services`、`openssl-tool`、`git`、`nodejs`）
